@@ -1,0 +1,45 @@
+package till
+
+trait PricesOffers {
+  val prices: Map[String,Double] = Map("apple" -> 0.60, "orange" -> 0.25)
+  val offers: Map[String, (Int,Int)] = Map("apple" -> (3, 2), "orange" -> (2, 1)) // eg apple 3 for 2
+  val saleItems: List[String] = List("apple","apple","orange","apple","orange")
+  val saleItemsTest: List[String] = List("apple","apple","orange","apple")
+}
+
+object till_total extends PricesOffers {
+  // Offers - Number of Items to charge
+  def itemToCharge(itemNumOff: Int, itemNumOffToCharge: Int, itemSold: Int ): Int =
+    itemSold/itemNumOff*itemNumOffToCharge + itemSold % itemNumOff
+  // Group Items Sold
+  def saleItemsGroup(saleItems: List[String]): Map[String, Int] = saleItems.groupBy(fr => fr).map({case (fr,xfr) => (fr, xfr.size)})
+  // Total sales NO Offers
+  def saleTotal(saleItemsGroup: Map[String, Int]): Double =
+    saleItemsGroup.map({ case (fr, frN) => frN*prices(fr)}).foldLeft(0.0)(_ + _)
+
+  // Total sales NO Offers
+  def saleTotalOffer(saleItemsGroup: Map[String, Int]): Double =
+    saleItemsGroup.map({ case (fr, frN) => itemToCharge(offers(fr)._1,offers(fr)._2,frN)*prices(fr)}).foldLeft(0.0)(_ + _)
+
+  def main(args: Array[String]): Unit = {
+    val saleTot = saleTotal(saleItemsGroup(saleItems))
+    val saleTotOffer = saleTotalOffer(saleItemsGroup(saleItems))
+    println(saleItemsGroup(saleItems))
+    println(saleTot)
+    println(saleTotOffer)
+  }
+
+}
+
+package till
+
+import org.scalatest.FunSuite
+
+class till_total_Test extends FunSuite with PricesOffers{
+  import till_total._
+
+  test("total Price") {
+    assert(saleTotal(saleItemsGroup(saleItemsTest)) == 2.05, " -> Total Price Check")
+  }
+
+}
