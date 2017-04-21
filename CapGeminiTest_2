@@ -1,0 +1,86 @@
+package till
+
+import org.scalacheck._
+
+trait PricesOffers {
+ // val prices: Map[String,Double] = Map("apple" -> 0.60, "orange" -> 0.25)
+  val prices = new Price("apple" -> 0.60, "orange" -> 0.25, "lemon" -> 0.20, "lime" -> 0.15)
+//  val offers: Map[String, (Int,Int)] = Map("apple" -> (3, 2), "orange" -> (2, 1)) // eg apple 3 for 2
+  val offers = new Offer(Map("apple" -> (3, 2), "orange" -> (2, 1))) // eg apple 3 for 2
+  val saleItems: List[String] = List("apple","apple","orange","apple","orange","lemon")
+  val saleItemsTest: List[String] = List("apple","apple","orange","apple")
+  // generate random lists
+  val genMixItems: Gen[List[String]] = Gen.nonEmptyListOf[String](Gen.oneOf("apple","orange","lemon","lime"))
+  val genNoOfferOnly: Gen[List[String]] = Gen.nonEmptyListOf[String](Gen.oneOf("lemon", "lime"))
+  val genOfferOnly: Gen[List[String]] = Gen.nonEmptyListOf[String](Gen.oneOf("apple", "orange"))
+}
+
+class Price(price: Map[String,Double]) {
+  def this(binds: (String,Double)*) = this(binds.toMap)
+  val prices = price withDefaultValue 0.0
+  def apply(x: String): Double = prices(x)
+}
+class Offer(offer: Map[String,(Int, Int)]) {
+  def this(binds: (String,(Int, Int))*) = this(binds.toMap)
+  val offers = offer withDefaultValue  (1,1)
+  def apply(x: String) = offers(x)
+}
+
+object till_total extends PricesOffers {
+
+  // Offers - Number of Items to charge
+  def itemToCharge(itemNumOff: Int, itemNumOffToCharge: Int, itemSold: Int ): Int =
+    itemSold/itemNumOff*itemNumOffToCharge + itemSold % itemNumOff
+  // Items Sold with quantities
+  def saleItemsGroup(saleItems: List[String]): Map[String, Int] = saleItems.groupBy(fr => fr).map({case (fr,xfr) => (fr, xfr.size)})
+  // Total sales NO Offers
+  def saleTotal(saleItemsGroup: Map[String, Int]): Double =
+    saleItemsGroup.map({ case (fr, frN) => frN*prices(fr)}).foldLeft(0.0)(_ + _)
+  // Total sales Offers
+  def saleTotalOffer(saleItemsGroup: Map[String, Int]): Double =
+    saleItemsGroup.map({ case (fr, frN) => itemToCharge(offers(fr)._1,offers(fr)._2,frN)*prices(fr)}).foldLeft(0.0)(_ + _)
+
+  def main(args: Array[String]): Unit = {
+    val saleTot = saleTotal(saleItemsGroup(saleItems))
+    val saleTotOffer = saleTotalOffer(saleItemsGroup(saleItems))
+    println(saleItemsGroup(saleItems))
+    println(saleTot)
+    println(saleTotOffer)
+  }
+}
+
+// TEST
+package till
+
+import org.scalatest.{FunSuite, Matchers}
+import org.scalacheck.Prop._
+
+class till_total_Test extends FunSuite with PricesOffers with Matchers {
+  import till_total._
+  // test amount of sale
+  test("total Price") {
+    assert(saleTotal(saleItemsGroup(saleItemsTest)) == 2.05, " -> Total Price Check")
+  }
+
+  // check Mixed items
+  val tMixItems = forAll(genMixItems)( l => saleTotal(saleItemsGroup(l)) >= saleTotalOffer(till_total.saleItemsGroup(l)))
+  tMixItems.check
+
+  // check items with No offer
+  val tNoOffer = forAll(genNoOfferOnly)( l => saleTotal(saleItemsGroup(l)) == saleTotalOffer(till_total.saleItemsGroup(l)))
+  tNoOffer.check
+
+  // Any quantity under offer
+  def isOffer(saleList: List[(String,Int)]): Boolean =
+    if (saleList.isEmpty) false
+    else if (saleList.head._2 >= offers(saleList.head._1)._1 && saleList.head._2>1) true
+    else isOffer(saleList.tail)
+  // check items under offer
+  val tOffer = forAll(genOfferOnly)( l => {
+   //   println(saleItemsGroup(l).toList)
+   //   println(isOffer(saleItemsGroup(l).toList))
+      if (isOffer(saleItemsGroup(l).toList))
+           saleTotal(saleItemsGroup(l)) > saleTotalOffer(till_total.saleItemsGroup(l))
+      else saleTotal(saleItemsGroup(l)) == saleTotalOffer(till_total.saleItemsGroup(l))})
+  tOffer.check
+}
